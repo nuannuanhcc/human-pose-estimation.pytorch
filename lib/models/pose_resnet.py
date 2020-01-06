@@ -173,6 +173,19 @@ class PoseResNet(nn.Module):
             stride=1,
             padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
         )
+        self.sigma_layer = nn.Sequential(
+            nn.Conv2d(
+                extra.NUM_DECONV_FILTERS[-1], extra.NUM_DECONV_FILTERS[-1]//4,
+                kernel_size=3, stride=1, bias=False
+            ),
+            nn.BatchNorm2d(extra.NUM_DECONV_FILTERS[-1]//4),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((1, 1)),
+        )
+        self.sigma_fc = nn.Sequential(
+            nn.Linear(extra.NUM_DECONV_FILTERS[-1]//4, cfg.MODEL.NUM_JOINTS * 2),
+            nn.Linear(cfg.MODEL.NUM_JOINTS * 2, cfg.MODEL.NUM_JOINTS)
+        )
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -242,10 +255,14 @@ class PoseResNet(nn.Module):
         x = self.layer3(x) # [32, 1024, 16, 16]
         x = self.layer4(x) # [32, 2048, 8, 8]
 
-        x = self.deconv_layers(x) # [32, 256, 64, 64]
-        x = self.final_layer(x) # [32, 16, 64, 64]
+        x1 = self.deconv_layers(x) # [32, 256, 64, 64]
+        x = self.final_layer(x1) # [32, 16, 64, 64]
 
-        return x
+        sigma = self.sigma_layer(x1)
+        sigma = sigma.view(*sigma.shape[:2])
+        sigma = self.sigma_fc(sigma)
+
+        return x, sigma
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):

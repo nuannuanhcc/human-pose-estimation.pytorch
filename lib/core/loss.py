@@ -9,7 +9,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch.nn as nn
-
+import torch
 
 class JointsMSELoss(nn.Module):
     def __init__(self, use_target_weight):
@@ -17,7 +17,7 @@ class JointsMSELoss(nn.Module):
         self.criterion = nn.MSELoss(size_average=True)
         self.use_target_weight = use_target_weight
 
-    def forward(self, output, target, target_weight):
+    def forward(self, output, target, target_weight, sigma):
         batch_size = output.size(0)
         num_joints = output.size(1)
         heatmaps_pred = output.reshape((batch_size, num_joints, -1)).split(1, 1)
@@ -28,10 +28,11 @@ class JointsMSELoss(nn.Module):
             heatmap_pred = heatmaps_pred[idx].squeeze()
             heatmap_gt = heatmaps_gt[idx].squeeze()
             if self.use_target_weight:
-                loss += 0.5 * self.criterion(
-                    heatmap_pred.mul(target_weight[:, idx]),
-                    heatmap_gt.mul(target_weight[:, idx])
-                )
+                pre = heatmap_pred.mul(target_weight[:, idx])
+                gt = heatmap_gt.mul(target_weight[:, idx])
+                mse = torch.mean((pre - gt) ** 2, dim=1)
+                mse = torch.exp(-sigma[:, idx]) * mse + sigma[:, idx]
+                loss += 0.5 * torch.mean(mse)
             else:
                 loss += 0.5 * self.criterion(heatmap_pred, heatmap_gt)
 
