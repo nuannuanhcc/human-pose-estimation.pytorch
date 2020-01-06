@@ -231,19 +231,19 @@ class PoseResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x): # [32, 3, 256, 256]
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.maxpool(x)
+        x = self.maxpool(x) # [32, 64, 64, 64]
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x = self.layer1(x) # [32, 256, 64, 64]
+        x = self.layer2(x) # [32, 512, 32, 32]
+        x = self.layer3(x) # [32, 1024, 16, 16]
+        x = self.layer4(x) # [32, 2048, 8, 8]
 
-        x = self.deconv_layers(x)
-        x = self.final_layer(x)
+        x = self.deconv_layers(x) # [32, 256, 64, 64]
+        x = self.final_layer(x) # [32, 16, 64, 64]
 
         return x
 
