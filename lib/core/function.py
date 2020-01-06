@@ -31,7 +31,8 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
     data_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
-
+    losses_ori = AverageMeter()
+    sigmas = AverageMeter()
     # switch to train mode
     model.train()
 
@@ -42,10 +43,13 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
 
         # compute output
         output, sigma = model(input)
+        var = torch.exp(sigma.reshape(-1) / 2).mean()
+        sigmas.update(var.item(), input.size(0))
+
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
 
-        loss = criterion(output, target, target_weight, sigma)
+        loss, loss_original = criterion(output, target, target_weight, sigma)
 
         # compute gradient and do update step
         optimizer.zero_grad()
@@ -54,7 +58,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
 
         # measure accuracy and record loss
         losses.update(loss.item(), input.size(0))
-
+        losses_ori.update(loss_original.item(), input.size(0))
         _, avg_acc, cnt, pred = accuracy(output.detach().cpu().numpy(),
                                          target.detach().cpu().numpy())
         acc.update(avg_acc, cnt)
@@ -69,15 +73,19 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                   'Speed {speed:.1f} samples/s\t' \
                   'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
                   'Loss {loss.val:.5f} ({loss.avg:.5f})\t' \
+                  'loss_original {loss_original.val:.5f} ({loss_original.avg:.5f})\t' \
+                  'sigmas {sigmas.val:.5f} ({sigmas.avg:.5f})\t' \
                   'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
                       speed=input.size(0)/batch_time.val,
-                      data_time=data_time, loss=losses, acc=acc)
+                      data_time=data_time, loss=losses, loss_original=losses_ori, sigmas=sigmas, acc=acc)
             logger.info(msg)
 
             writer = writer_dict['writer']
             global_steps = writer_dict['train_global_steps']
             writer.add_scalar('train_loss', losses.val, global_steps)
+            writer.add_scalar('train_loss_ori', losses_ori.val, global_steps)
+            writer.add_scalar('train_sigmas', sigmas.val, global_steps)
             writer.add_scalar('train_acc', acc.val, global_steps)
             writer_dict['train_global_steps'] = global_steps + 1
 
@@ -91,6 +99,8 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     batch_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
+    losses_ori = AverageMeter()
+    sigmas = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
@@ -108,6 +118,9 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
             output, sigma = model(input)
+            var = torch.exp(sigma.reshape(-1) / 2).mean()
+            sigmas.update(var.item(), input.size(0))
+
             if config.TEST.FLIP_TEST:
                 # this part is ugly, because pytorch has not supported negative index
                 # input_flipped = model(input[:, :, :, ::-1])
@@ -130,11 +143,13 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target = target.cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
 
-            loss = criterion(output, target, target_weight, sigma)
+            loss, loss_original = criterion(output, target, target_weight, sigma)
 
             num_images = input.size(0)
             # measure accuracy and record loss
             losses.update(loss.item(), num_images)
+            losses_ori.update(loss_original.item(), input.size(0))
+
             _, avg_acc, cnt, pred = accuracy(output.cpu().numpy(),
                                              target.cpu().numpy())
 
@@ -169,9 +184,11 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 msg = 'Test: [{0}/{1}]\t' \
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
+                      'loss_original {loss_original.val:.5f} ({loss_original.avg:.5f})\t' \
+                      'sigmas {sigmas.val:.5f} ({sigmas.avg:.5f})\t' \
                       'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                           i, len(val_loader), batch_time=batch_time,
-                          loss=losses, acc=acc)
+                          loss=losses, loss_original=losses_ori, sigmas=sigmas, acc=acc)
                 logger.info(msg)
 
                 prefix = '{}_{}'.format(os.path.join(output_dir, 'val'), i)
@@ -193,6 +210,8 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             writer = writer_dict['writer']
             global_steps = writer_dict['valid_global_steps']
             writer.add_scalar('valid_loss', losses.avg, global_steps)
+            writer.add_scalar('valid_loss_ori', losses_ori.val, global_steps)
+            writer.add_scalar('valid_sigmas', sigmas.val, global_steps)
             writer.add_scalar('valid_acc', acc.avg, global_steps)
             if isinstance(name_values, list):
                 for name_value in name_values:

@@ -23,7 +23,7 @@ class JointsMSELoss(nn.Module):
         heatmaps_pred = output.reshape((batch_size, num_joints, -1)).split(1, 1)
         heatmaps_gt = target.reshape((batch_size, num_joints, -1)).split(1, 1)
         loss = 0
-
+        loss_original = 0
         for idx in range(num_joints):
             heatmap_pred = heatmaps_pred[idx].squeeze()
             heatmap_gt = heatmaps_gt[idx].squeeze()
@@ -33,7 +33,8 @@ class JointsMSELoss(nn.Module):
                 mse = torch.mean((pre - gt) ** 2, dim=1)
                 mse = torch.exp(-sigma[:, idx]) * mse + sigma[:, idx]
                 loss += 0.5 * torch.mean(mse)
+                loss_original += 0.5 * self.criterion(pre, gt)
             else:
                 loss += 0.5 * self.criterion(heatmap_pred, heatmap_gt)
 
-        return loss / num_joints
+        return loss / num_joints, loss_original / num_joints
