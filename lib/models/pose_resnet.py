@@ -174,17 +174,26 @@ class PoseResNet(nn.Module):
             padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
         )
         self.sigma_layer = nn.Sequential(
-            nn.Conv2d(
-                extra.NUM_DECONV_FILTERS[-1], extra.NUM_DECONV_FILTERS[-1]//4,
-                kernel_size=3, stride=1, bias=False
-            ),
-            nn.BatchNorm2d(extra.NUM_DECONV_FILTERS[-1]//4),
-            nn.ReLU(inplace=True),
+            # nn.Conv2d(
+            #     extra.NUM_DECONV_FILTERS[-1], extra.NUM_DECONV_FILTERS[-1]//4,
+            #     kernel_size=3, stride=1, bias=False
+            # ),
+            # nn.BatchNorm2d(extra.NUM_DECONV_FILTERS[-1]//4),
+            # nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((1, 1)),
         )
         self.sigma_fc = nn.Sequential(
-            nn.Linear(extra.NUM_DECONV_FILTERS[-1]//4, cfg.MODEL.NUM_JOINTS * 2),
-            nn.Linear(cfg.MODEL.NUM_JOINTS * 2, cfg.MODEL.NUM_JOINTS)
+            nn.Linear(2048, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=0.5),
+
+            nn.Linear(256, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=0.5),
+
+            nn.Linear(64, 16),
         )
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -253,10 +262,10 @@ class PoseResNet(nn.Module):
         x = self.layer1(x) # [32, 256, 64, 64]
         x = self.layer2(x) # [32, 512, 32, 32]
         x = self.layer3(x) # [32, 1024, 16, 16]
-        x = self.layer4(x) # [32, 2048, 8, 8]
+        x1 = self.layer4(x) # [32, 2048, 8, 8]
 
-        x1 = self.deconv_layers(x) # [32, 256, 64, 64]
-        x = self.final_layer(x1) # [32, 16, 64, 64]
+        x = self.deconv_layers(x1) # [32, 256, 64, 64]
+        x = self.final_layer(x) # [32, 16, 64, 64]
 
         sigma = self.sigma_layer(x1)
         sigma = sigma.view(*sigma.shape[:2])
