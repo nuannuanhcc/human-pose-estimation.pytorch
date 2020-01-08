@@ -83,10 +83,10 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
 
             writer = writer_dict['writer']
             global_steps = writer_dict['train_global_steps']
-            writer.add_scalar('train_loss', losses.val, global_steps)
-            writer.add_scalar('train_loss_ori', losses_ori.val, global_steps)
-            writer.add_scalar('train_sigmas', sigmas.val, global_steps)
-            writer.add_scalar('train_acc', acc.val, global_steps)
+            writer.add_scalar('train_loss', losses.avg, global_steps)
+            writer.add_scalar('train_loss_ori', losses_ori.avg, global_steps)
+            writer.add_scalar('train_sigmas', sigmas.avg, global_steps)
+            writer.add_scalar('train_acc', acc.avg, global_steps)
             writer_dict['train_global_steps'] = global_steps + 1
 
             prefix = '{}_{}'.format(os.path.join(output_dir, 'train'), i)
@@ -210,8 +210,8 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             writer = writer_dict['writer']
             global_steps = writer_dict['valid_global_steps']
             writer.add_scalar('valid_loss', losses.avg, global_steps)
-            writer.add_scalar('valid_loss_ori', losses_ori.val, global_steps)
-            writer.add_scalar('valid_sigmas', sigmas.val, global_steps)
+            writer.add_scalar('valid_loss_ori', losses_ori.avg, global_steps)
+            writer.add_scalar('valid_sigmas', sigmas.avg, global_steps)
             writer.add_scalar('valid_acc', acc.avg, global_steps)
             if isinstance(name_values, list):
                 for name_value in name_values:
