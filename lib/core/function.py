@@ -72,8 +72,8 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                   'Time {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t' \
                   'Speed {speed:.1f} samples/s\t' \
                   'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
-                  'Loss {loss.val:.5f} ({loss.avg:.5f})\t' \
-                  'loss_original {loss_original.val:.5f} ({loss_original.avg:.5f})\t' \
+                  'Loss_all {loss.val:.5f} ({loss.avg:.5f})\t' \
+                  'loss {loss_original.val:.5f} ({loss_original.avg:.5f})\t' \
                   'sigmas {sigmas.val:.5f} ({sigmas.avg:.5f})\t' \
                   'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
@@ -83,8 +83,8 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
 
             writer = writer_dict['writer']
             global_steps = writer_dict['train_global_steps']
-            writer.add_scalar('train_loss', losses.avg, global_steps)
-            writer.add_scalar('train_loss_ori', losses_ori.avg, global_steps)
+            writer.add_scalar('train_loss_all', losses.avg, global_steps)
+            writer.add_scalar('train_loss', losses_ori.avg, global_steps)
             writer.add_scalar('train_sigmas', sigmas.avg, global_steps)
             writer.add_scalar('train_acc', acc.avg, global_steps)
             writer_dict['train_global_steps'] = global_steps + 1
@@ -183,8 +183,8 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             if i % config.PRINT_FREQ == 0:
                 msg = 'Test: [{0}/{1}]\t' \
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
-                      'loss_original {loss_original.val:.5f} ({loss_original.avg:.5f})\t' \
+                      'Loss_all {loss.val:.4f} ({loss.avg:.4f})\t' \
+                      'loss {loss_original.val:.5f} ({loss_original.avg:.5f})\t' \
                       'sigmas {sigmas.val:.5f} ({sigmas.avg:.5f})\t' \
                       'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                           i, len(val_loader), batch_time=batch_time,
@@ -209,8 +209,8 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         if writer_dict:
             writer = writer_dict['writer']
             global_steps = writer_dict['valid_global_steps']
-            writer.add_scalar('valid_loss', losses.avg, global_steps)
-            writer.add_scalar('valid_loss_ori', losses_ori.avg, global_steps)
+            writer.add_scalar('valid_loss_all', losses.avg, global_steps)
+            writer.add_scalar('valid_loss', losses_ori.avg, global_steps)
             writer.add_scalar('valid_sigmas', sigmas.avg, global_steps)
             writer.add_scalar('valid_acc', acc.avg, global_steps)
             if isinstance(name_values, list):
