@@ -17,7 +17,7 @@ class JointsMSELoss(nn.Module):
         self.criterion = nn.MSELoss(size_average=True)
         self.use_target_weight = use_target_weight
 
-    def forward(self, output, target, target_weight, sigma):
+    def forward(self, output, target, target_weight, sigma, C=0.3e-3):
         batch_size = output.size(0)
         num_joints = output.size(1)
         heatmaps_pred = output.reshape((batch_size, num_joints, -1)).split(1, 1)
@@ -33,13 +33,9 @@ class JointsMSELoss(nn.Module):
                 pre = heatmap_pred.mul(target_weight[:, idx])
                 gt = heatmap_gt.mul(target_weight[:, idx])
                 mse = torch.mean((pre - gt) ** 2, dim=1)
-                mse = torch.exp(-sigma[:, idx]) * mse + sigma[:, idx]
-                loss += 0.5 * torch.mean(mse)
+                mse = torch.exp(-sigma[:, idx]) * mse + C * sigma[:, idx]
+                loss += torch.mean(mse)
                 loss_original += 0.5 * self.criterion(pre, gt)
-
-                var_pre = torch.exp(sigma[:, idx] / 2).mul(target_weight[:, idx])
-                var_gt = var[:, idx].mul(target_weight[:, idx])
-                loss_var += self.criterion(var_pre, var_gt)
             else:
                 loss += 0.5 * self.criterion(heatmap_pred, heatmap_gt)
-        return (loss + 10 * loss_var) / num_joints, loss_original / num_joints
+        return loss / num_joints, loss_original / num_joints
