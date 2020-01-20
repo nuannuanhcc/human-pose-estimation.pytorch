@@ -37,7 +37,7 @@ from utils.utils import create_logger
 import dataset
 import models
 import neptune
-from IPython import embed
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Train keypoints network')
     # general
