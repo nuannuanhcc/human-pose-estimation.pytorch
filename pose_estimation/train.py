@@ -36,7 +36,7 @@ from utils.utils import create_logger
 
 import dataset
 import models
-
+import neptune
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train keypoints network')
@@ -99,11 +99,13 @@ def main():
         os.path.join(this_dir, '../lib/models', config.MODEL.NAME + '.py'),
         final_output_dir)
 
-    writer_dict = {
-        'writer': SummaryWriter(log_dir=tb_log_dir),
+    global_steps = {
         'train_global_steps': 0,
         'valid_global_steps': 0,
     }
+    neptune.init('hccccccccc/human-pose-base')
+    neptune.create_experiment(args.cfg.split('/')[-1])
+    neptune.append_tag('pose')
 
     dump_input = torch.rand((config.TRAIN.BATCH_SIZE,
                              3,
@@ -168,16 +170,17 @@ def main():
     best_model = False
     for epoch in range(config.TRAIN.BEGIN_EPOCH, config.TRAIN.END_EPOCH):
         lr_scheduler.step()
+        lr = lr_scheduler.get_lr()
 
         # train for one epoch
         train(config, train_loader, model, criterion, optimizer, epoch,
-              final_output_dir, tb_log_dir, writer_dict)
+              final_output_dir, tb_log_dir, global_steps, lr)
 
 
         # evaluate on validation set
         perf_indicator = validate(config, valid_loader, valid_dataset, model,
                                   criterion, final_output_dir, tb_log_dir,
-                                  writer_dict)
+                                  global_steps)
 
         if perf_indicator > best_perf:
             best_perf = perf_indicator
@@ -199,8 +202,7 @@ def main():
     logger.info('saving final model state to {}'.format(
         final_model_state_file))
     torch.save(model.module.state_dict(), final_model_state_file)
-    writer_dict['writer'].close()
-
+    neptune.stop()
 
 if __name__ == '__main__':
     main()

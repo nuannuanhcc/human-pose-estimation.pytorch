@@ -20,13 +20,13 @@ from core.evaluate import accuracy
 from core.inference import get_final_preds
 from utils.transforms import flip_back
 from utils.vis import save_debug_images
-
+import neptune
 
 logger = logging.getLogger(__name__)
 
 
 def train(config, train_loader, model, criterion, optimizer, epoch,
-          output_dir, tb_log_dir, writer_dict):
+          output_dir, tb_log_dir, global_steps, lr):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -81,13 +81,11 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                       data_time=data_time, loss=losses, loss_original=losses_ori, sigmas=sigmas, acc=acc)
             logger.info(msg)
 
-            writer = writer_dict['writer']
-            global_steps = writer_dict['train_global_steps']
-            writer.add_scalar('train_loss_all', losses.avg, global_steps)
-            writer.add_scalar('train_loss', losses_ori.avg, global_steps)
-            writer.add_scalar('train_sigmas', sigmas.avg, global_steps)
-            writer.add_scalar('train_acc', acc.avg, global_steps)
-            writer_dict['train_global_steps'] = global_steps + 1
+            neptune_step = global_steps['train_global_steps']
+            neptune.send_metric('train_loss', neptune_step, losses.val)
+            neptune.send_metric('train_acc', neptune_step, acc.val)
+            neptune.send_metric('lr', neptune_step, lr[0])
+            global_steps['train_global_steps'] = neptune_step + 1
 
             prefix = '{}_{}'.format(os.path.join(output_dir, 'train'), i)
             save_debug_images(config, input, meta, target, pred*4, output,
@@ -95,7 +93,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
 
 
 def validate(config, val_loader, val_dataset, model, criterion, output_dir,
-             tb_log_dir, writer_dict=None):
+             tb_log_dir, global_steps=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
@@ -206,19 +204,17 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         else:
             _print_name_value(name_values, full_arch_name)
 
-        if writer_dict:
-            writer = writer_dict['writer']
-            global_steps = writer_dict['valid_global_steps']
-            writer.add_scalar('valid_loss_all', losses.avg, global_steps)
-            writer.add_scalar('valid_loss', losses_ori.avg, global_steps)
-            writer.add_scalar('valid_sigmas', sigmas.avg, global_steps)
-            writer.add_scalar('valid_acc', acc.avg, global_steps)
+        if global_steps:
+            neptune_step = global_steps['valid_global_steps']
+            neptune.send_metric('valid_loss', neptune_step, losses.avg)
+            neptune.send_metric('valid_acc', neptune_step, acc.avg)
             if isinstance(name_values, list):
                 for name_value in name_values:
-                    writer.add_scalars('valid', dict(name_value), global_steps)
+                    neptune.send_metric('valid', neptune_step, dict(name_value))
             else:
-                writer.add_scalars('valid', dict(name_values), global_steps)
-            writer_dict['valid_global_steps'] = global_steps + 1
+                for k, v in dict(name_values).items():
+                    neptune.send_metric(k, neptune_step, v)
+            global_steps['valid_global_steps'] = neptune_step + 1
 
     return perf_indicator
 
