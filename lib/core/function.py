@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def train(config, train_loader, model, criterion, optimizer, epoch,
-          output_dir, tb_log_dir, global_steps, lr):
+          output_dir, tb_log_dir, global_steps=None, lr=None):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -80,12 +80,12 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                       speed=input.size(0)/batch_time.val,
                       data_time=data_time, loss=losses, loss_original=losses_ori, sigmas=sigmas, acc=acc)
             logger.info(msg)
-
-            neptune_step = global_steps['train_global_steps']
-            neptune.send_metric('train_loss', neptune_step, losses.val)
-            neptune.send_metric('train_acc', neptune_step, acc.val)
-            neptune.send_metric('lr', neptune_step, lr[0])
-            global_steps['train_global_steps'] = neptune_step + 1
+            if global_steps:
+                neptune_step = global_steps['train_global_steps']
+                neptune.send_metric('train_loss', neptune_step, losses.val)
+                neptune.send_metric('train_acc', neptune_step, acc.val)
+                neptune.send_metric('lr', neptune_step, lr[0])
+                global_steps['train_global_steps'] = neptune_step + 1
 
             prefix = '{}_{}'.format(os.path.join(output_dir, 'train'), i)
             save_debug_images(config, input, meta, target, pred*4, output,

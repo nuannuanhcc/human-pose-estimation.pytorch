@@ -99,13 +99,15 @@ def main():
         os.path.join(this_dir, '../lib/models', config.MODEL.NAME + '.py'),
         final_output_dir)
 
-    global_steps = {
-        'train_global_steps': 0,
-        'valid_global_steps': 0,
-    }
-    neptune.init('hccccccccc/human-pose-base')
-    neptune.create_experiment(args.cfg.split('/')[-1])
-    neptune.append_tag('pose')
+    global_steps = None
+    if config.USE_NEPTUNE:
+        global_steps = {
+            'train_global_steps': 0,
+            'valid_global_steps': 0,
+        }
+        neptune.init('hccccccccc/human-pose-base')
+        neptune.create_experiment(args.cfg.split('/')[-1])
+        neptune.append_tag('pose')
 
     dump_input = torch.rand((config.TRAIN.BATCH_SIZE,
                              3,
@@ -168,7 +170,23 @@ def main():
 
     best_perf = 0.0
     best_model = False
-    for epoch in range(config.TRAIN.BEGIN_EPOCH, config.TRAIN.END_EPOCH):
+
+    optimizer = get_optimizer(config, model)
+    begin_epoch = config.TRAIN.BEGIN_EPOCH
+    checkpoint_file = os.path.join(final_output_dir, 'checkpoint.pth.tar')
+
+    if config.TRAIN.RESUME and os.path.exists(checkpoint_file):
+        logger.info("=> loading checkpoint '{}'".format(checkpoint_file))
+        checkpoint = torch.load(checkpoint_file)
+        begin_epoch = checkpoint['epoch']
+        best_perf = checkpoint['perf']
+        last_epoch = checkpoint['epoch']
+        model.module.load_state_dict(checkpoint['state_dict'], strict=False)
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        logger.info("=> loaded checkpoint '{}' (epoch {})".format(
+            checkpoint_file, checkpoint['epoch']))
+
+    for epoch in range(begin_epoch, config.TRAIN.END_EPOCH):
         lr_scheduler.step()
         lr = lr_scheduler.get_lr()
 
@@ -202,7 +220,8 @@ def main():
     logger.info('saving final model state to {}'.format(
         final_model_state_file))
     torch.save(model.module.state_dict(), final_model_state_file)
-    neptune.stop()
+    if config.USE_NEPTUNE:
+        neptune.stop()
 
 if __name__ == '__main__':
     main()
