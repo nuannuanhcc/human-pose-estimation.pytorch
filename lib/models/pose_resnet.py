@@ -14,7 +14,7 @@ import logging
 import torch
 import torch.nn as nn
 from collections import OrderedDict
-
+from torch.nn import functional as F
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -231,6 +231,25 @@ class PoseResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
+    def soft_argmax(self, output):
+        batch_size, num_joints, height, width = output.shape
+
+        heatmaps = output.view((batch_size, num_joints, -1))
+        heatmaps = F.softmax(heatmaps*10, 2)
+        heatmaps = heatmaps.view(*output.shape)
+
+        accu_x = torch.sum(heatmaps, -2)
+        accu_y = torch.sum(heatmaps, -1)
+
+        accu_x = accu_x * torch.arange(1, width + 1).type(torch.cuda.FloatTensor)
+        accu_y = accu_y * torch.arange(1, height + 1).type(torch.cuda.FloatTensor)
+
+        accu_x = accu_x.sum(dim=2, keepdim=True) - 1
+        accu_y = accu_y.sum(dim=2, keepdim=True) - 1
+
+        coord_out = torch.cat((accu_x, accu_y), dim=2)
+        return coord_out
+
     def forward(self, x): # [32, 3, 256, 256]
         x = self.conv1(x)
         x = self.bn1(x)
@@ -244,8 +263,8 @@ class PoseResNet(nn.Module):
 
         x = self.deconv_layers(x) # [32, 256, 64, 64]
         x = self.final_layer(x) # [32, 16, 64, 64]
-
-        return x
+        coors = self.soft_argmax(x)
+        return coors
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):

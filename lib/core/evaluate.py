@@ -53,6 +53,10 @@ def accuracy(output, target, hm_type='gaussian', thr=0.5):
         h = output.shape[2]
         w = output.shape[3]
         norm = np.ones((pred.shape[0], 2)) * np.array([h, w]) / 10
+    else:
+        pred = output
+        h=w=64
+        norm = np.ones((pred.shape[0], 2)) * np.array([h, w]) / 10
     dists = calc_dists(pred, target, norm)
 
     acc = np.zeros((len(idx) + 1))

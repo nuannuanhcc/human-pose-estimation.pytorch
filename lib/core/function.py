@@ -57,7 +57,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         losses.update(loss.item(), input.size(0))
 
         _, avg_acc, cnt, pred = accuracy(output.detach().cpu().numpy(),
-                                         target.detach().cpu().numpy())
+                                         target.detach().cpu().numpy(), hm_type='coors')
         acc.update(avg_acc, cnt)
 
         # measure elapsed time
@@ -83,8 +83,8 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                 global_steps['train_global_steps'] = neptune_step + 1
 
             prefix = '{}_{}'.format(os.path.join(output_dir, 'train'), i)
-            save_debug_images(config, input, meta, target, pred*4, output,
-                              prefix)
+            # save_debug_images(config, input, meta, target, pred*4, output,
+            #                   prefix)
 
 
 def validate(config, val_loader, val_dataset, model, criterion, output_dir,
@@ -115,17 +115,14 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 input_flipped = np.flip(input.cpu().numpy(), 3).copy()
                 input_flipped = torch.from_numpy(input_flipped).cuda()
                 output_flipped = model(input_flipped)
-                output_flipped = flip_back(output_flipped.cpu().numpy(),
-                                           val_dataset.flip_pairs)
-                output_flipped = torch.from_numpy(output_flipped.copy()).cuda()
-
-                # feature is not aligned, shift flipped heatmap for higher accuracy
-                if config.TEST.SHIFT_HEATMAP:
-                    output_flipped[:, :, :, 1:] = \
-                        output_flipped.clone()[:, :, :, 0:-1]
-                    # output_flipped[:, :, :, 0] = 0
-
-                output = (output + output_flipped) * 0.5
+                output_flipped[:, :, 0] = 64 - output_flipped[:, :, 0] - 1
+                for pair in val_dataset.flip_pairs:
+                    output_flipped[:, pair[0], :], output_flipped[:, pair[1], :] = output_flipped[:,
+                                                                                         pair[1],
+                                                                                         :].clone(), output_flipped[
+                                                                                                     :, pair[0],
+                                                                                                     :].clone()
+                output = (output + output_flipped) / 2.
 
             target = target.cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
@@ -136,7 +133,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             # measure accuracy and record loss
             losses.update(loss.item(), num_images)
             _, avg_acc, cnt, pred = accuracy(output.cpu().numpy(),
-                                             target.cpu().numpy())
+                                             target.cpu().numpy(), hm_type='coors')
 
             acc.update(avg_acc, cnt)
 
@@ -175,8 +172,8 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 logger.info(msg)
 
                 prefix = '{}_{}'.format(os.path.join(output_dir, 'val'), i)
-                save_debug_images(config, input, meta, target, pred*4, output,
-                                  prefix)
+                # save_debug_images(config, input, meta, target, pred*4, output,
+                #                   prefix)
 
         name_values, perf_indicator = val_dataset.evaluate(
             config, all_preds, output_dir, all_boxes, image_path,
