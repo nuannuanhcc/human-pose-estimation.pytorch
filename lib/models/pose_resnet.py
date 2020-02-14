@@ -173,6 +173,24 @@ class PoseResNet(nn.Module):
             stride=1,
             padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
         )
+        self.log_var_head = nn.Sequential()
+        self.log_var_head.add_module('gap', nn.AdaptiveAvgPool2d((1, 1)))
+        self.log_var_head.add_module('bottle_neck',
+                                nn.Sequential(
+                                    nn.Linear(2048, 256, bias=False),
+                                    nn.BatchNorm1d(256),
+                                    nn.ReLU(inplace=True),
+                                    # nn.Dropout(p=0.5),
+
+                                    nn.Linear(256, 64, bias=False),
+                                    nn.BatchNorm1d(64),
+                                    nn.ReLU(inplace=True),
+                                    # nn.Dropout(p=0.5),
+                                ))
+        self.log_var_head.add_module('fc', nn.Linear(64, 16))
+
+        nn.init.constant_(self.log_var_head.fc.weight, 0)
+        nn.init.constant_(self.log_var_head.fc.bias, 0)
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -235,7 +253,7 @@ class PoseResNet(nn.Module):
         batch_size, num_joints, height, width = output.shape
 
         heatmaps = output.view((batch_size, num_joints, -1))
-        heatmaps = F.softmax(heatmaps*10, 2)
+        heatmaps = F.softmax(heatmaps, 2)
         heatmaps = heatmaps.view(*output.shape)
 
         accu_x = torch.sum(heatmaps, -2)
@@ -261,10 +279,15 @@ class PoseResNet(nn.Module):
         x = self.layer3(x) # [32, 1024, 16, 16]
         x = self.layer4(x) # [32, 2048, 8, 8]
 
-        x = self.deconv_layers(x) # [32, 256, 64, 64]
-        x = self.final_layer(x) # [32, 16, 64, 64]
-        coors = self.soft_argmax(x)
-        return coors
+        fm = self.log_var_head.gap(x)
+        fm = fm.view(*fm.shape[:2])
+        fm = self.log_var_head.bottle_neck(fm)
+        log_var = self.log_var_head.fc(fm)
+
+        hm = self.deconv_layers(x) # [32, 256, 64, 64]
+        hm = self.final_layer(hm) # [32, 16, 64, 64]
+        coors = self.soft_argmax(hm)
+        return coors, log_var
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):

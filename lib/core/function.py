@@ -42,15 +42,18 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         data_time.update(time.time() - end)
 
         # compute output
-        output = model(input)
+        output, log_var = model(input)
+        var = torch.exp(log_var.reshape(-1) / 2)
+        var = var.mean()
+
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
 
-        loss = criterion(output, target, target_weight)
+        loss, loss_all = criterion(output, target, target_weight, log_var)
 
         # compute gradient and do update step
         optimizer.zero_grad()
-        loss.backward()
+        loss_all.backward()
         optimizer.step()
 
         # measure accuracy and record loss
@@ -70,14 +73,18 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                   'Speed {speed:.1f} samples/s\t' \
                   'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
                   'Loss {loss.val:.5f} ({loss.avg:.5f})\t' \
+                  'Loss_all {loss_all:.5f} ({loss_all:.5f})\t' \
+                  'Var {var:.5f} ({var:.5f})\t' \
                   'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
                       speed=input.size(0)/batch_time.val,
-                      data_time=data_time, loss=losses, acc=acc)
+                      data_time=data_time, loss=losses, loss_all=loss_all, var=var, acc=acc)
             logger.info(msg)
             if global_steps:
                 neptune_step = global_steps['train_global_steps']
                 neptune.send_metric('train_loss', neptune_step, losses.val)
+                neptune.send_metric('train_loss_all', neptune_step, loss_all)
+                neptune.send_metric('train_var', neptune_step, var)
                 neptune.send_metric('train_acc', neptune_step, acc.val)
                 neptune.send_metric('lr', neptune_step, lr[0])
                 global_steps['train_global_steps'] = neptune_step + 1
@@ -108,13 +115,13 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         end = time.time()
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            output = model(input)
+            output, log_var = model(input)
             if config.TEST.FLIP_TEST:
                 # this part is ugly, because pytorch has not supported negative index
                 # input_flipped = model(input[:, :, :, ::-1])
                 input_flipped = np.flip(input.cpu().numpy(), 3).copy()
                 input_flipped = torch.from_numpy(input_flipped).cuda()
-                output_flipped = model(input_flipped)
+                output_flipped = model(input_flipped)[0]
                 output_flipped[:, :, 0] = 64 - output_flipped[:, :, 0] - 1
                 for pair in val_dataset.flip_pairs:
                     output_flipped[:, pair[0], :], output_flipped[:, pair[1], :] = output_flipped[:,
@@ -127,7 +134,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target = target.cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
 
-            loss = criterion(output, target, target_weight)
+            loss, loss_all = criterion(output, target, target_weight, log_var)
 
             num_images = input.size(0)
             # measure accuracy and record loss
@@ -166,9 +173,10 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 msg = 'Test: [{0}/{1}]\t' \
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
+                      'Loss_all {loss_all:.4f} ({loss_all:.4f})\t' \
                       'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                           i, len(val_loader), batch_time=batch_time,
-                          loss=losses, acc=acc)
+                          loss=losses, loss_all=loss_all, acc=acc)
                 logger.info(msg)
 
                 prefix = '{}_{}'.format(os.path.join(output_dir, 'val'), i)
@@ -189,6 +197,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         if global_steps:
             neptune_step = global_steps['valid_global_steps']
             neptune.send_metric('valid_loss', neptune_step, losses.avg)
+            neptune.send_metric('valid_loss_all', neptune_step, loss_all)
             neptune.send_metric('valid_acc', neptune_step, acc.avg)
             if isinstance(name_values, list):
                 for name_value in name_values:
