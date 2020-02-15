@@ -249,11 +249,12 @@ class PoseResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def soft_argmax(self, output):
+    def soft_argmax(self, output, scale):
         batch_size, num_joints, height, width = output.shape
 
         heatmaps = output.view((batch_size, num_joints, -1))
-        heatmaps = F.softmax(heatmaps, 2)
+        scale = scale.unsqueeze(-1).expand(-1, -1, heatmaps.shape[-1])
+        heatmaps = F.softmax(scale * heatmaps, 2)
         heatmaps = heatmaps.view(*output.shape)
 
         accu_x = torch.sum(heatmaps, -2)
@@ -268,7 +269,7 @@ class PoseResNet(nn.Module):
         coord_out = torch.cat((accu_x, accu_y), dim=2)
         return coord_out
 
-    def forward(self, x): # [32, 3, 256, 256]
+    def forward(self, x, target, target_vis, s_max=10, s_min=1, thresh=2): # [32, 3, 256, 256]
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -282,12 +283,32 @@ class PoseResNet(nn.Module):
         fm = self.log_var_head.gap(x)
         fm = fm.view(*fm.shape[:2])
         fm = self.log_var_head.bottle_neck(fm)
-        log_var = self.log_var_head.fc(fm)
+        scale = self.log_var_head.fc(fm)
+        scale = F.sigmoid(scale)
+        scale = (s_max - s_min) * scale + s_min
 
         hm = self.deconv_layers(x) # [32, 256, 64, 64]
         hm = self.final_layer(hm) # [32, 16, 64, 64]
-        coors = self.soft_argmax(hm)
-        return coors, log_var
+
+        coors = self.soft_argmax(hm, scale)
+
+        batch_size, num_joints, height, width = hm.shape
+        heatmaps = hm.view((batch_size, num_joints, -1))  # [32, 16, 262144]
+
+        idx = torch.argmax(heatmaps, dim=2, keepdim=True)
+
+        preds = idx.repeat(1, 1, 2)
+        preds[:, :, 0] = (preds[:, :, 0]) % width
+        preds[:, :, 1] = (preds[:, :, 1]) / width
+
+        dis = torch.abs(preds.type(torch.cuda.FloatTensor) - target) * target_vis
+        dis = torch.mean(dis, -1)  # [32, 16]
+        mask = dis > thresh
+
+        loss_norm = torch.where(mask, torch.clamp(scale - s_min, min=0), torch.clamp(s_max - scale, min=0))  # [32, 16]
+
+        return coors, scale, loss_norm
+
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):

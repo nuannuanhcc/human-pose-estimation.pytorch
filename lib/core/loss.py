@@ -19,12 +19,12 @@ class JointsMSELoss(nn.Module):
         self.criterion = nn.SmoothL1Loss(size_average=True)
         self.use_target_weight = use_target_weight
 
-    def forward(self, output, target, target_vis, log_var):
-        log_var = log_var * target_vis.squeeze(-1)
+    def forward(self, output, target, target_vis, scale, loss_norm, lamda=0.1):
         loss_coord = torch.abs(output - target) * target_vis
         loss_coord = (loss_coord[:, :, 0] + loss_coord[:, :, 1]) / 2.
-        loss_all = torch.exp(-log_var) * loss_coord + 1*log_var
-        return loss_coord.mean(), loss_all.mean()
+        loss_norm = loss_norm * target_vis.squeeze(-1)
+        loss_all = loss_coord + lamda * loss_norm
+        return loss_coord.mean(), loss_all.mean(), loss_norm.mean()
 
 
     # def forward(self, output, target, target_weight):

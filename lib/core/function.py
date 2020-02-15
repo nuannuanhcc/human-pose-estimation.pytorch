@@ -41,15 +41,14 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         # measure data loading time
         data_time.update(time.time() - end)
 
-        # compute output
-        output, log_var = model(input)
-        var = torch.exp(log_var.reshape(-1) / 2)
-        var = var.mean()
-
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
 
-        loss, loss_all = criterion(output, target, target_weight, log_var)
+        # compute output
+        output, scale, loss_norm = model(input, target, target_weight)
+
+        loss, loss_all, loss_norm = criterion(output, target, target_weight, scale, loss_norm)
+        scale = scale.mean()
 
         # compute gradient and do update step
         optimizer.zero_grad()
@@ -74,17 +73,17 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                   'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
                   'Loss {loss.val:.5f} ({loss.avg:.5f})\t' \
                   'Loss_all {loss_all:.5f} ({loss_all:.5f})\t' \
-                  'Var {var:.5f} ({var:.5f})\t' \
+                  'Scale {scale:.5f} ({scale:.5f})\t' \
                   'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
                       speed=input.size(0)/batch_time.val,
-                      data_time=data_time, loss=losses, loss_all=loss_all, var=var, acc=acc)
+                      data_time=data_time, loss=losses, loss_all=loss_all, scale=scale, acc=acc)
             logger.info(msg)
             if global_steps:
                 neptune_step = global_steps['train_global_steps']
                 neptune.send_metric('train_loss', neptune_step, losses.val)
                 neptune.send_metric('train_loss_all', neptune_step, loss_all)
-                neptune.send_metric('train_var', neptune_step, var)
+                neptune.send_metric('train_scale', neptune_step, scale)
                 neptune.send_metric('train_acc', neptune_step, acc.val)
                 neptune.send_metric('lr', neptune_step, lr[0])
                 global_steps['train_global_steps'] = neptune_step + 1
@@ -115,13 +114,13 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         end = time.time()
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            output, log_var = model(input)
+            output, scale, loss_norm = model(input, target, target_weight)
             if config.TEST.FLIP_TEST:
                 # this part is ugly, because pytorch has not supported negative index
                 # input_flipped = model(input[:, :, :, ::-1])
                 input_flipped = np.flip(input.cpu().numpy(), 3).copy()
                 input_flipped = torch.from_numpy(input_flipped).cuda()
-                output_flipped = model(input_flipped)[0]
+                output_flipped = model(input_flipped, target, target_weight)[0]
                 output_flipped[:, :, 0] = 64 - output_flipped[:, :, 0] - 1
                 for pair in val_dataset.flip_pairs:
                     output_flipped[:, pair[0], :], output_flipped[:, pair[1], :] = output_flipped[:,
@@ -134,7 +133,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target = target.cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
 
-            loss, loss_all = criterion(output, target, target_weight, log_var)
+            loss, loss_all, loss_norm = criterion(output, target, target_weight, scale, loss_norm)
 
             num_images = input.size(0)
             # measure accuracy and record loss
