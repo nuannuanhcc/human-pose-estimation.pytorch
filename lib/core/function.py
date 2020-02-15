@@ -41,7 +41,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         # measure data loading time
         data_time.update(time.time() - end)
 
-        target = target.cuda(non_blocking=True)
+        target = target.type(torch.FloatTensor).cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
 
         # compute output
@@ -114,7 +114,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         end = time.time()
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            output, scale, loss_norm = model(input, target, target_weight)
+            output, scale, loss_norm = model(input, target.type(torch.FloatTensor).cuda(non_blocking=True), target_weight)
             if config.TEST.FLIP_TEST:
                 # this part is ugly, because pytorch has not supported negative index
                 # input_flipped = model(input[:, :, :, ::-1])
@@ -130,7 +130,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                                                                                                      :].clone()
                 output = (output + output_flipped) / 2.
 
-            target = target.cuda(non_blocking=True)
+            target = target.type(torch.FloatTensor).cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
 
             loss, loss_all, loss_norm = criterion(output, target, target_weight, scale, loss_norm)

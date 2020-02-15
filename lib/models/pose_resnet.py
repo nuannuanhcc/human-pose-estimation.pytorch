@@ -10,7 +10,7 @@ from __future__ import print_function
 
 import os
 import logging
-
+from core.config import config
 import torch
 import torch.nn as nn
 from collections import OrderedDict
@@ -144,6 +144,10 @@ class Bottleneck_CAFFE(nn.Module):
 class PoseResNet(nn.Module):
 
     def __init__(self, block, layers, cfg, **kwargs):
+        if config.DATASET.DATASET == 'coco':
+            self.num_joint=17
+        else:
+            self.num_joint = 16
         self.inplanes = 64
         extra = cfg.MODEL.EXTRA
         self.deconv_with_bias = extra.DECONV_WITH_BIAS
@@ -187,7 +191,7 @@ class PoseResNet(nn.Module):
                                     nn.ReLU(inplace=True),
                                     # nn.Dropout(p=0.5),
                                 ))
-        self.log_var_head.add_module('fc', nn.Linear(64, 16))
+        self.log_var_head.add_module('fc', nn.Linear(64, self.num_joint))
 
         nn.init.constant_(self.log_var_head.fc.weight, 0)
         nn.init.constant_(self.log_var_head.fc.bias, 0)
@@ -300,7 +304,6 @@ class PoseResNet(nn.Module):
         preds = idx.repeat(1, 1, 2)
         preds[:, :, 0] = (preds[:, :, 0]) % width
         preds[:, :, 1] = (preds[:, :, 1]) / width
-
         dis = torch.abs(preds.type(torch.cuda.FloatTensor) - target) * target_vis
         dis = torch.mean(dis, -1)  # [32, 16]
         mask = dis > thresh
