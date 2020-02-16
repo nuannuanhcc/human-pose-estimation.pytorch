@@ -13,7 +13,7 @@ import math
 import numpy as np
 import torch
 from utils.transforms import transform_preds
-
+from core.config import config
 
 def get_max_preds(batch_heatmaps):
     '''
@@ -66,8 +66,9 @@ def get_final_preds(config, coords, center, scale):
     maxvals = np.ones((coords.shape[0], coords.shape[1], 1))
     preds = coords.copy()
     # Transform back
+    heatmap_height, heatmap_width = config.MODEL.EXTRA.HEATMAP_SIZE
     for i in range(coords.shape[0]):
         preds[i] = transform_preds(coords[i], center[i], scale[i],
-                                   [64, 64])
+                                   [heatmap_height, heatmap_width])
 
     return preds, maxvals

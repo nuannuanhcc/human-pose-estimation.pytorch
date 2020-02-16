@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from collections import OrderedDict
 from torch.nn import functional as F
+from core.config import config
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -187,7 +188,7 @@ class PoseResNet(nn.Module):
                                     nn.ReLU(inplace=True),
                                     # nn.Dropout(p=0.5),
                                 ))
-        self.log_var_head.add_module('fc', nn.Linear(64, 16))
+        self.log_var_head.add_module('fc', nn.Linear(64, config.MODEL.NUM_JOINTS))
 
         nn.init.constant_(self.log_var_head.fc.weight, 0)
         nn.init.constant_(self.log_var_head.fc.bias, 0)

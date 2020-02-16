@@ -46,7 +46,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         var = torch.exp(log_var.reshape(-1) / 2)
         var = var.mean()
 
-        target = target.cuda(non_blocking=True)
+        target = target.type(torch.FloatTensor).cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
 
         loss, loss_all = criterion(output, target, target_weight, log_var)
@@ -122,7 +122,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 input_flipped = np.flip(input.cpu().numpy(), 3).copy()
                 input_flipped = torch.from_numpy(input_flipped).cuda()
                 output_flipped = model(input_flipped)[0]
-                output_flipped[:, :, 0] = 64 - output_flipped[:, :, 0] - 1
+                output_flipped[:, :, 0] = config.MODEL.EXTRA.HEATMAP_SIZE[1] - output_flipped[:, :, 0] - 1
                 for pair in val_dataset.flip_pairs:
                     output_flipped[:, pair[0], :], output_flipped[:, pair[1], :] = output_flipped[:,
                                                                                          pair[1],
@@ -131,7 +131,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                                                                                                      :].clone()
                 output = (output + output_flipped) / 2.
 
-            target = target.cuda(non_blocking=True)
+            target = target.type(torch.FloatTensor).cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
 
             loss, loss_all = criterion(output, target, target_weight, log_var)
