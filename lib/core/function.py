@@ -121,7 +121,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 input_flipped = np.flip(input.cpu().numpy(), 3).copy()
                 input_flipped = torch.from_numpy(input_flipped).cuda()
                 output_flipped = model(input_flipped, target, target_weight)[0]
-                output_flipped[:, :, 0] = 64 - output_flipped[:, :, 0] - 1
+                output_flipped[:, :, 0] = config.MODEL.EXTRA.HEATMAP_SIZE[1] - output_flipped[:, :, 0] - 1
                 for pair in val_dataset.flip_pairs:
                     output_flipped[:, pair[0], :], output_flipped[:, pair[1], :] = output_flipped[:,
                                                                                          pair[1],

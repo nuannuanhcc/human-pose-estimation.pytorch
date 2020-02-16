@@ -9,7 +9,7 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-
+from core.config import config
 from core.inference import get_max_preds
 
 
@@ -55,7 +55,7 @@ def accuracy(output, target, hm_type='gaussian', thr=0.5):
         norm = np.ones((pred.shape[0], 2)) * np.array([h, w]) / 10
     else:
         pred = output
-        h=w=64
+        h, w = config.MODEL.EXTRA.HEATMAP_SIZE
         norm = np.ones((pred.shape[0], 2)) * np.array([h, w]) / 10
     dists = calc_dists(pred, target, norm)
 

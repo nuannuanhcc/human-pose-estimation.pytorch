@@ -144,10 +144,6 @@ class Bottleneck_CAFFE(nn.Module):
 class PoseResNet(nn.Module):
 
     def __init__(self, block, layers, cfg, **kwargs):
-        if config.DATASET.DATASET == 'coco':
-            self.num_joint=17
-        else:
-            self.num_joint = 16
         self.inplanes = 64
         extra = cfg.MODEL.EXTRA
         self.deconv_with_bias = extra.DECONV_WITH_BIAS
@@ -191,7 +187,7 @@ class PoseResNet(nn.Module):
                                     nn.ReLU(inplace=True),
                                     # nn.Dropout(p=0.5),
                                 ))
-        self.log_var_head.add_module('fc', nn.Linear(64, self.num_joint))
+        self.log_var_head.add_module('fc', nn.Linear(64, config.MODEL.NUM_JOINTS))
 
         nn.init.constant_(self.log_var_head.fc.weight, 0)
         nn.init.constant_(self.log_var_head.fc.bias, 0)
