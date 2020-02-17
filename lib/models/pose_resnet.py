@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from collections import OrderedDict
 from torch.nn import functional as F
+from core.config import config
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
