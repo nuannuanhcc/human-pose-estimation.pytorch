@@ -236,7 +236,7 @@ class PoseResNet(nn.Module):
         batch_size, num_joints, height, width = output.shape
 
         heatmaps = output.view((batch_size, num_joints, -1))
-        heatmaps = F.softmax(heatmaps*10, 2)
+        heatmaps = F.softmax(heatmaps, 2)
         heatmaps = heatmaps.view(*output.shape)
 
         accu_x = torch.sum(heatmaps, -2)
@@ -265,7 +265,7 @@ class PoseResNet(nn.Module):
         x = self.deconv_layers(x) # [32, 256, 64, 64]
         x = self.final_layer(x) # [32, 16, 64, 64]
         coors = self.soft_argmax(x)
-        return coors
+        return coors, x
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):
