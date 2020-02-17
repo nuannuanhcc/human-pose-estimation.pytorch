@@ -288,7 +288,7 @@ class PoseResNet(nn.Module):
         hm = self.deconv_layers(x) # [32, 256, 64, 64]
         hm = self.final_layer(hm) # [32, 16, 64, 64]
         coors = self.soft_argmax(hm)
-        return coors, log_var
+        return coors, hm, log_var
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):
