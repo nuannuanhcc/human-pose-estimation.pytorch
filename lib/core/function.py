@@ -144,7 +144,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             num_images = input.size(0)
             # measure accuracy and record loss
             losses.update(loss_all.item(), num_images)
-            _, avg_acc, cnt, pred = accuracy(output[0].cpu().numpy(),
+            _, avg_acc, cnt, pred = accuracy(output.cpu().numpy(),
                                              target.cpu().numpy(), hm_type='coors')
 
             acc.update(avg_acc, cnt)
