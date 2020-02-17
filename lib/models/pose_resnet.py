@@ -306,7 +306,7 @@ class PoseResNet(nn.Module):
 
         loss_norm = torch.where(mask, torch.clamp(scale - s_min, min=0), torch.clamp(s_max - scale, min=0))  # [32, 16]
 
-        return coors, scale, loss_norm
+        return coors, hm, scale, loss_norm
 
 
     def init_weights(self, pretrained=''):
