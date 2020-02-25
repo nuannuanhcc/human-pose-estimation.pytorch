@@ -42,11 +42,9 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         data_time.update(time.time() - end)
 
         # compute output
-        output = model(input)
         target = target.type(torch.FloatTensor).cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
-
-        loss = criterion(output, target, target_weight)
+        output, loss = model(input, target, target_weight)
 
         # compute gradient and do update step
         optimizer.zero_grad()
@@ -108,13 +106,15 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         end = time.time()
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            output = model(input)
+            target = target.type(torch.FloatTensor).cuda(non_blocking=True)
+            target_weight = target_weight.cuda(non_blocking=True)
+            output, loss = model(input, target, target_weight)
             if config.TEST.FLIP_TEST:
                 # this part is ugly, because pytorch has not supported negative index
                 # input_flipped = model(input[:, :, :, ::-1])
                 input_flipped = np.flip(input.cpu().numpy(), 3).copy()
                 input_flipped = torch.from_numpy(input_flipped).cuda()
-                output_flipped = model(input_flipped)
+                output_flipped = model(input_flipped)[0]
                 output_flipped[:, :, 0] = config.MODEL.EXTRA.HEATMAP_SIZE[1] - output_flipped[:, :, 0] - 1
                 for pair in val_dataset.flip_pairs:
                     output_flipped[:, pair[0], :], output_flipped[:, pair[1], :] = output_flipped[:,
@@ -123,11 +123,6 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                                                                                                      :, pair[0],
                                                                                                      :].clone()
                 output = (output + output_flipped) / 2.
-
-            target = target.type(torch.FloatTensor).cuda(non_blocking=True)
-            target_weight = target_weight.cuda(non_blocking=True)
-
-            loss = criterion(output, target, target_weight)
 
             num_images = input.size(0)
             # measure accuracy and record loss

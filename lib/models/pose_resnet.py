@@ -251,7 +251,7 @@ class PoseResNet(nn.Module):
         coord_out = torch.cat((accu_x, accu_y), dim=2)
         return coord_out
 
-    def forward(self, x): # [32, 3, 256, 256]
+    def forward(self, x, target, target_vis): # [32, 3, 256, 256]
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -265,7 +265,11 @@ class PoseResNet(nn.Module):
         x = self.deconv_layers(x) # [32, 256, 64, 64]
         x = self.final_layer(x) # [32, 16, 64, 64]
         coors = self.soft_argmax(x)
-        return coors
+
+        # compute loss
+        loss_coord = torch.abs(coors - target) * target_vis
+        loss_coord = (loss_coord[:, :, 0] + loss_coord[:, :, 1]) / 2.
+        return coors, loss_coord.mean()
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):
