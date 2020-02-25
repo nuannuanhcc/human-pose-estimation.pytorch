@@ -24,7 +24,7 @@ config.GPUS = '0'
 config.WORKERS = 4
 config.PRINT_FREQ = 20
 config.USE_NEPTUNE = False
-config.all_loss = ['arg_loss','hm_loss']  #  'arg_loss', 'hm_loss'
+
 # Cudnn related params
 config.CUDNN = edict()
 config.CUDNN.BENCHMARK = True

@@ -37,17 +37,16 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
     model.train()
 
     end = time.time()
-    for i, (input, target_hm, target, target_weight, meta) in enumerate(train_loader):
+    for i, (input, target, target_weight, meta) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
 
         # compute output
         output = model(input)
-        target_hm = target_hm.cuda(non_blocking=True)
         target = target.type(torch.FloatTensor).cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
 
-        loss, loss_coord, loss_hm = criterion(output, target_hm, target, target_weight)
+        loss = criterion(output, target, target_weight)
 
         # compute gradient and do update step
         optimizer.zero_grad()
@@ -57,7 +56,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         # measure accuracy and record loss
         losses.update(loss.item(), input.size(0))
 
-        _, avg_acc, cnt, pred = accuracy(output[0].detach().cpu().numpy(),
+        _, avg_acc, cnt, pred = accuracy(output.detach().cpu().numpy(),
                                          target.detach().cpu().numpy(), hm_type='coors')
         acc.update(avg_acc, cnt)
 
@@ -71,12 +70,10 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                   'Speed {speed:.1f} samples/s\t' \
                   'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
                   'Loss {loss.val:.5f} ({loss.avg:.5f})\t' \
-                  'Loss_coord {loss_coord:.4f} ({loss_coord:.4f})\t' \
-                  'Loss_hm {loss_hm:.4f} ({loss_hm:.4f})\t' \
                   'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
                       speed=input.size(0)/batch_time.val,
-                      data_time=data_time, loss=losses, loss_coord=loss_coord, loss_hm=loss_hm, acc=acc)
+                      data_time=data_time, loss=losses, acc=acc)
             logger.info(msg)
             if global_steps:
                 neptune_step = global_steps['train_global_steps']
@@ -109,15 +106,15 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     idx = 0
     with torch.no_grad():
         end = time.time()
-        for i, (input, target_hm, target, target_weight, meta) in enumerate(val_loader):
+        for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            output, output_hm = model(input)
+            output = model(input)
             if config.TEST.FLIP_TEST:
                 # this part is ugly, because pytorch has not supported negative index
                 # input_flipped = model(input[:, :, :, ::-1])
                 input_flipped = np.flip(input.cpu().numpy(), 3).copy()
                 input_flipped = torch.from_numpy(input_flipped).cuda()
-                output_flipped = model(input_flipped)[0]
+                output_flipped = model(input_flipped)
                 output_flipped[:, :, 0] = config.MODEL.EXTRA.HEATMAP_SIZE[1] - output_flipped[:, :, 0] - 1
                 for pair in val_dataset.flip_pairs:
                     output_flipped[:, pair[0], :], output_flipped[:, pair[1], :] = output_flipped[:,
@@ -127,11 +124,10 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                                                                                                      :].clone()
                 output = (output + output_flipped) / 2.
 
-            target_hm = target_hm.cuda(non_blocking=True)
             target = target.type(torch.FloatTensor).cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
 
-            loss, loss_coord, loss_hm = criterion((output, output_hm), target_hm, target, target_weight)
+            loss = criterion(output, target, target_weight)
 
             num_images = input.size(0)
             # measure accuracy and record loss
@@ -170,11 +166,9 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 msg = 'Test: [{0}/{1}]\t' \
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
-                      'Loss_coord {loss_coord:.4f} ({loss_coord:.4f})\t' \
-                      'Loss_hm {loss_hm:.4f} ({loss_hm:.4f})\t' \
                       'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                           i, len(val_loader), batch_time=batch_time,
-                          loss=losses, loss_coord=loss_coord, loss_hm=loss_hm, acc=acc)
+                          loss=losses, acc=acc)
                 logger.info(msg)
 
                 prefix = '{}_{}'.format(os.path.join(output_dir, 'val'), i)

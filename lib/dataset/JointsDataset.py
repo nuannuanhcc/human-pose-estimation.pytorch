@@ -131,7 +131,7 @@ class JointsDataset(Dataset):
             'score': score
         }
 
-        return input, target, joints[:, :2] / 4, target_weight, meta
+        return input, joints[:, :2] / 4, target_weight, meta
 
     def select_data(self, db):
         db_selected = []
