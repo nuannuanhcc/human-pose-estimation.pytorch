@@ -176,9 +176,13 @@ class PoseResNet(nn.Module):
             stride=1,
             padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
         )
+        if 'mpii' in config.DATASET.DATASET:
+            self.skeleton = ((0, 1), (1, 2), (2, 6), (7, 12), (12, 11), (11, 10), (5, 4), (4, 3), (3, 6), (7, 13),
+                             (13, 14), (14, 15), (6, 7), (7, 8), (8, 9))
+        if 'coco' in config.DATASET.DATASET:
+            self.skeleton = ((1, 2), (0, 1), (0, 2), (2, 4), (1, 3), (6, 8), (8, 10), (5, 7), (7, 9), (12, 14),
+                             (14, 16), (11, 13), (13, 15), (5, 6), (11, 12))
 
-        self.skeleton = ((0, 1), (1, 2), (2, 6), (7, 12), (12, 11), (11, 10), (5, 4), (4, 3), (3, 6), (7, 13), (13, 14),
-                         (14, 15), (6, 7), (7, 8), (8, 9))
         self.gcn = SemGCN(adj_mx_from_skeleton(config.MODEL.NUM_JOINTS, self.skeleton),
                           hid_dim=128, num_layers=1, p_dropout=0.5)
 

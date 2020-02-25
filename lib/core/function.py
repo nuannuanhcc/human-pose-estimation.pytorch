@@ -45,7 +45,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         target = target.type(torch.FloatTensor).cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
         output, loss = model(input, target, target_weight)
-
+        loss = loss.mean()
         # compute gradient and do update step
         optimizer.zero_grad()
         loss.backward()
