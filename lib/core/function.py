@@ -109,6 +109,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target = target.type(torch.FloatTensor).cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
             output, loss = model(input, target, target_weight)
+            loss = loss.mean()
             if config.TEST.FLIP_TEST:
                 # this part is ugly, because pytorch has not supported negative index
                 # input_flipped = model(input[:, :, :, ::-1])
