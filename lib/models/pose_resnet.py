@@ -16,6 +16,8 @@ import torch.nn as nn
 from collections import OrderedDict
 from torch.nn import functional as F
 from core.config import config
+from models.sem_gcn import SemGCN
+from utils.gcn_utils import adj_mx_from_skeleton
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -175,6 +177,11 @@ class PoseResNet(nn.Module):
             padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
         )
 
+        self.skeleton = ((0, 1), (1, 2), (2, 6), (7, 12), (12, 11), (11, 10), (5, 4), (4, 3), (3, 6), (7, 13), (13, 14),
+                         (14, 15), (6, 7), (7, 8), (8, 9))
+        self.gcn = SemGCN(adj_mx_from_skeleton(config.MODEL.NUM_JOINTS, self.skeleton),
+                          hid_dim=128, num_layers=1, p_dropout=0.5)
+
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
@@ -265,11 +272,15 @@ class PoseResNet(nn.Module):
         x = self.deconv_layers(x) # [32, 256, 64, 64]
         x = self.final_layer(x) # [32, 16, 64, 64]
         coors = self.soft_argmax(x)
-
+        # gcn
+        coors1 = self.gcn(x.view(*x.shape[:2], -1))
         # compute loss
         loss_coord = torch.abs(coors - target) * target_vis
         loss_coord = (loss_coord[:, :, 0] + loss_coord[:, :, 1]) / 2.
-        return coors, loss_coord.mean()
+        # compute refine loss
+        loss_coord1 = torch.abs(coors1 - target) * target_vis
+        loss_coord1 = (loss_coord1[:, :, 0] + loss_coord1[:, :, 1]) / 2.
+        return coors1, loss_coord.mean()+loss_coord1.mean()
 
     def init_weights(self, pretrained=''):
         if os.path.isfile(pretrained):
